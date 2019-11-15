@@ -9,14 +9,14 @@ from control_msgs.msg import *
 from trajectory_msgs.msg import *
 from copy import copy
 import rbdl
-
+import matplotlib.pyplot as plt
 
 
 
 class Robot:
-	def  __init__(self):
+	def  __init__(self, deltaT):
 		# Measured data initiation
-		self.deltaT = 0.01
+		self.deltaT = deltaT
 
 		self.q = []		# Joint position
 		self.qd = np.array([])	# Joint velocities
@@ -26,10 +26,11 @@ class Robot:
 
 
 		# Controller data
-		self.q0 = np.array([-np.pi/4., 0.0, 0.4, 0, 0, 0])
+		self.q0 = np.array([0.,-np.pi/2. - 0.4, 0., -np.pi/2, 0, 0])
 		self.torque = np.zeros(self.q0.shape[0]) # Estimated actual torque
 		self.torque_desired = []
-		self.q_desired = []
+		self.q_desired = np.zeros(self.q0.shape[0])
+		self.controller = Controller(self.q0, self.deltaT, self.q0.shape[0])
 
 
 		# Command
@@ -55,19 +56,17 @@ class Robot:
 
 		self.calculate_torque()
 
-
-
 	def position_control_update(self, q_desired):
 		self.fjt.trajectory = JointTrajectory()
 		self.fjt.trajectory.joint_names = self.joint_names
 		self.fjt.trajectory.points = [JointTrajectoryPoint(positions = q_desired, velocities = 6*[0.,],
-												time_from_start = rospy.Duration(0.1))]
+												time_from_start = rospy.Duration(self.deltaT))]
 		self.client.send_goal(self.fjt)
 		self.client.wait_for_server()
 
 	def calculate_torque(self):
 		rbdl.InverseDynamics(self.model, self.q, self.qd, self.qdd, self.torque)
-		print(self.torque)
+		#print(self.torque)
 
 	def bring_initial_position(self):
 		self.position_control_update(self.q0)
@@ -76,29 +75,68 @@ class Robot:
 		self.client.cancel_goal()
 
 	def simple_bangbang(self, torque_desired):
+		e = self.torque - torque_desired
+		self.controller.update(e)
+		q_desired = self.controller.output()
+
+		# To take off!!!!!
+		q_desired = q_desired * [0,1,0,0,0,0] + self.q0 * [1,0,1,1,1,1]
 		return q_desired
 
 class Controller:
-	def __init__(self):
-		pass
+	def __init__(self, q, deltaT, q_size):
+		self.deltaT = deltaT
+		self.kb = 0.05
+		self.Ki = 1 * np.ones([q_size, q_size])
+		self.u = q#np.zeros(q_size)
+		self.ud = np.zeros(q_size)
+
+	def update(self, e):
+		self.ud = self.kb * self.Ki.dot(np.sign(e))
+
+	def output(self):
+		self.u = self.u + self.deltaT*self.ud
+		return self.u
 
 
-def main():
-	rospy.init_node("robot_control", anonymous = True)
+#def main():
 
-	robot = Robot()
-	r = rospy.Rate(100)
-
-	rospy.loginfo("Bring Initial Position")
-	time.sleep(0.5)
-	while not rospy.is_shutdown():
-		robot.bring_initial_position()
-		r.sleep() 
-	rospy.loginfo("Robot is in Initial Position")
 
 if __name__ == '__main__':
 	print("Starting test")
+
+	rospy.init_node("robot_control", anonymous = True)
+	f = 100.
+	robot = Robot(1/f)
+	q_desired_lst = []
+	torque_lst = []
+	q_lst = []
+
 	try:
-		main()
+		r = rospy.Rate(f)
+
+		rospy.loginfo("Bring Initial Position")
+		for _ in range(100):
+			robot.bring_initial_position()
+		rospy.loginfo("Robot is in Initial Position")
+		time.sleep(0.5)
+
+		t0 = time.time()
+
+		while not rospy.is_shutdown():
+			torque_desired =  np.array([0.,5.,0.,0.,0.,0.]) # np.sin( 0.1 * (time.time() - t0)) *np.array([0.,10.,0.,0.,0.,0.])
+			q_desired = robot.simple_bangbang(torque_desired)
+			robot.position_control_update(q_desired)
+			q_desired_lst.append(q_desired[1])
+			q_lst.append(robot.q[1])
+			torque_lst.append(robot.torque[1])
+			r.sleep() 
 	except rospy.ROSInterruptException:
-		pass#robot.destroy()
+		print("holi")
+		robot.destroy()
+		f, ax = plt.subplots(2)
+		ax[0].plot(np.arange(len(q_desired_lst)), q_desired_lst, color = 'red')
+		ax[0].plot(np.arange(len(q_lst)), q_lst, color = 'blue')
+		ax[1].plot(np.arange(len(torque_lst)), torque_lst, color = 'red')
+		plt.show()
+		pass#
