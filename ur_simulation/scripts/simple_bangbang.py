@@ -26,7 +26,7 @@ class Robot:
 
 
 		# Controller data
-		self.q0 = np.array([0.,-np.pi/2. +0.4, 0., -np.pi/2, 0, 0])
+		self.q0 = np.array([0.,-np.pi/2. +0.2, 0., -np.pi/2, 0, 0])
 		self.torque = np.zeros(self.q0.shape[0]) # Estimated actual torque
 		self.torque_desired = []
 		self.q_desired = np.zeros(self.q0.shape[0])
@@ -87,12 +87,12 @@ class Controller:
 	def __init__(self, q, deltaT, q_size):
 		self.deltaT = deltaT
 		self.kb = 0.1
-		self.Ki = np.diag(np.array([1.,4.,1.,1.,1.,1.])) #np.ones([q_size, q_size])
+		self.Ki = np.diag(np.array([1.,2.,1.,1.,1.,1.])) #np.ones([q_size, q_size])
 		self.u = q#np.zeros(q_size)
 		self.ud = np.zeros(q_size)
 
 	def update(self, e):
-		self.ud = - self.kb * self.Ki.dot(np.sign(e))
+		self.ud =  self.kb * self.Ki.dot(np.sign(e))
 
 	def output(self):
 		self.u = self.u + self.deltaT*self.ud
@@ -124,7 +124,7 @@ if __name__ == '__main__':
 		t0 = time.time()
 
 		while not rospy.is_shutdown():
-			torque_desired =  np.array([0.,-20.,0.,0.,0.,0.])# +  np.sin( 0.1 * (time.time() - t0)) *np.array([0.,5.,0.,0.,0.,0.])
+			torque_desired =  np.array([0.,-20.,0.,0.,0.,0.]) +  np.sin( 1. * (time.time() - t0)) *np.array([0.,5.,0.,0.,0.,0.])
 			q_desired = robot.simple_bangbang(torque_desired)
 			robot.position_control_update(q_desired)
 			q_desired_lst.append(q_desired[1])
