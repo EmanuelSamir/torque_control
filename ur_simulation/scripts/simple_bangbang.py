@@ -11,7 +11,8 @@ from copy import copy
 import rbdl
 import matplotlib.pyplot as plt
 
-
+# name: [elbow_joint, shoulder_lift_joint, shoulder_pan_joint, wrist_1_joint, wrist_2_joint,
+# wrist_3_joint]
 
 class Robot:
 	def  __init__(self, deltaT):
@@ -26,7 +27,7 @@ class Robot:
 
 
 		# Controller data
-		self.q0 = np.array([0.,-np.pi/2. +0.2, 0., -np.pi/2, 0, 0])
+		self.q0 = np.array([0., 0. , 0., -np.pi/2, 0, 0])
 		self.torque = np.zeros(self.q0.shape[0]) # Estimated actual torque
 		self.torque_desired = []
 		self.q_desired = np.zeros(self.q0.shape[0])
@@ -80,14 +81,14 @@ class Robot:
 		q_desired = self.controller.output()
 
 		# To take off!!!!!
-		q_desired = q_desired * [0,1,0,0,0,0] + self.q0 * [1,0,1,1,1,1]
+		q_desired = q_desired * [0,0,1,0,0,0] + self.q0 * [1,1,0,1,1,1]
 		return q_desired
 
 class Controller:
 	def __init__(self, q, deltaT, q_size):
 		self.deltaT = deltaT
 		self.kb = 0.1
-		self.Ki = np.diag(np.array([1.,2.,1.,1.,1.,1.])) #np.ones([q_size, q_size])
+		self.Ki = np.diag(np.array([10.,1.,1.,1.,1.,1.])) #np.ones([q_size, q_size])
 		self.u = q#np.zeros(q_size)
 		self.ud = np.zeros(q_size)
 
@@ -124,14 +125,15 @@ if __name__ == '__main__':
 		t0 = time.time()
 
 		while not rospy.is_shutdown():
-			torque_desired =  np.array([0.,-20.,0.,0.,0.,0.]) +  np.sin( 1. * (time.time() - t0)) *np.array([0.,5.,0.,0.,0.,0.])
+			torque_desired =  np.array([0 ,0, 1.,0.,0.,0.]) +  np.sin( 1. * (time.time() - t0)) *np.array([0.,0.,0.,0.,0.,0.])
 			q_desired = robot.simple_bangbang(torque_desired)
 			robot.position_control_update(q_desired)
-			q_desired_lst.append(q_desired[1])
-			q_lst.append(robot.q[1])
-			torque_lst.append(robot.torque[1])
+			q_desired_lst.append(q_desired[2])
+			q_lst.append(robot.q[2])
+			torque_lst.append(robot.torque[2])
 			r.sleep() 
 	except rospy.ROSInterruptException:
+		
 		print("holi")
 		robot.destroy()
 		f, ax = plt.subplots(2)
