@@ -11,7 +11,8 @@ from copy import copy
 import rbdl
 import matplotlib.pyplot as plt
 
-
+# name: [elbow_joint, shoulder_lift_joint, shoulder_pan_joint, wrist_1_joint, wrist_2_joint,
+# wrist_3_joint]
 
 class Robot:
 	def  __init__(self, deltaT):
@@ -29,11 +30,11 @@ class Robot:
 
 
 		# Controller data
-		self.velocity_lst = []
-		self.velocity_lst = []
-
-
-		# Controller data
+<<<<<<< HEAD
+		self.q0 = np.array([0., 0. , 0., -np.pi/2, 0, 0])
+=======
+		self.q0 = np.array([0., -0.5, 0., 0., 0., 0.]) # Up Up Up Down Up Up
+>>>>>>> cd079c4b4e1652f83490c2272e19fec2d42ed9c8
 		self.torque = np.zeros(self.q0.shape[0]) # Estimated actual torque
 		self.torque_desired = []
 		self.q_desired = np.zeros(self.q0.shape[0])
