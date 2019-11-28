@@ -10,6 +10,8 @@ from trajectory_msgs.msg import *
 from copy import copy
 import rbdl
 import matplotlib.pyplot as plt
+from numpy.linalg import inv
+from numpy import matmul as mx
 
 
 
@@ -20,6 +22,11 @@ class Robot:
 		self.q = np.array([])		# Joint position
 		self.qd = np.array([])	# Joint velocities
 		self.qdd = np.array([])	# Joint acceleration
+
+		cl = Joint(self.deltaT)
+
+		self.joint_spaces = [copy(cl), copy(cl), copy(cl), copy(cl), copy(cl), copy(cl)]
+
 		self.X = []		# Spatial position: x-y-z
 		self.joint_names = []
 
@@ -33,10 +40,11 @@ class Robot:
 		self.velocity_lst = []
 
 		# Controller data
+		self.qdd_tocheck = np.zeros(self.q0.shape[0])
 		self.torque = np.zeros(self.q0.shape[0]) # Estimated actual torque
 		self.torque_desired = []
 		self.q_desired = np.zeros(self.q0.shape[0])
-		self.controller = Controller(self.q0, self.deltaT, self.q0.shape[0])
+		#self.controller = Controller(self.q0, self.deltaT, self.q0.shape[0])
 
 
 		# Command
@@ -53,23 +61,24 @@ class Robot:
 
 	def cb_joint_state(self, data):
 		self.joint_names = sort_data(data.name)
+		q_pred = np.array(sort_data(data.position))
 
-		q = copy(self.q)
-		self.q = np.array(sort_data(data.position))
+		q = []
+		qd = []
+		qdd = []
 
-		self.velocity_lst.append(sort_data(data.velocity)[0])
+		for i, _ in enumerate(self.joint_spaces):
+			self.joint_spaces[i].update_data(q_pred[i])
+			q.append(self.joint_spaces[i].q)
+			qd.append(self.joint_spaces[i].qd)
+			qdd.append(self.joint_spaces[i].qdd)
 
-		qd = copy(self.qd)
-
-		if q.shape == self.q.shape:
-			self.qd = (self.q - q)/self.deltaT
-
-		#self.qd = np.array(sort_data(data.velocity))
-
-		if qd.shape == self.qd.shape:
-			self.qdd = (self.qd - qd)/self.deltaT
+		self.q = np.array(q)
+		self.qd = np.array(qd)
+		self.qdd = np.array(qdd)
 
 		self.calculate_torque()
+		self.calculate_acceleration()
 
 	def position_control_update(self, q_desired):
 		self.fjt.trajectory = JointTrajectory()
@@ -82,6 +91,9 @@ class Robot:
 	def calculate_torque(self):
 		rbdl.InverseDynamics(self.model, self.q, self.qd, self.qdd, self.torque)
 
+	def calculate_acceleration(self):
+		rbdl.ForwardDynamics(self.model, self.q, self.qd, self.torque, self.qdd_tocheck)
+
 	def bring_initial_position(self):
 		self.position_control_update(self.q0)
 
@@ -89,27 +101,9 @@ class Robot:
 		self.client.cancel_goal()
 
 	def simple_bangbang(self, torque_desired):
-		e = self.torque - torque_desired
-		self.controller.update(e)
-		q_desired = self.controller.output()
-		# To take off!!!!!
-		q_desired = q_desired * [1,0,0,0,0,0] + self.q0 * [0,1,1,1,1,1]
+		q_desired = np.sin(2.*time.time())
+		q_desired = q_desired * np.array([1,0,0,0,0,0]) + self.q0 * np.array([0,1,1,1,1,1])
 		return q_desired
-
-class Controller:
-	def __init__(self, q, deltaT, q_size):
-		self.deltaT = deltaT
-		self.kb = 0.1
-		self.Ki = np.diag(np.array([5.,4.,1.,1.,1.,1.])) #np.ones([q_size, q_size])
-		self.u = q #np.zeros(q_size)
-		self.ud = np.zeros(q_size)
-
-	def update(self, e):
-		self.ud =   -self.kb * self.Ki.dot(np.sign(e))
-
-	def output(self):
-		self.u = self.u + self.deltaT*self.ud
-		return self.u
 
 def sort_data(data):
 	x = list(copy(data))
@@ -123,19 +117,54 @@ def unsort_data(data):
 	x[0] = data[2]
 	return tuple(x)
 
-#def main():
+class SavGol:
+	def __init__(self):
+		self.coeff = np.array([-2, 3, 6, 7, 6, 3, -2])/21.
+		self.X = np.zeros(7)
+
+	def update(self, x):
+		self.X[:-1] = self.X[1:]
+		self.X[-1] = x
+		y = np.sum(self.coeff * self.X)
+		return y
+
+
+class Joint:
+    def __init__(self, deltaT):
+        self.q = 0.
+        self.qd = 0.
+        self.qdd = 0.
+
+        self.deltaT = deltaT
+        
+        self.sav_gol_qd = SavGol()
+        self.sav_gol_qdd = SavGol()
+        
+
+    def update_data(self, q):
+    	qd_ = (q - self.q)/self.deltaT
+    	qd = self.sav_gol_qd.update(qd_)
+
+    	qdd_ =(qd - self.qd)/self.deltaT
+    	qdd = self.sav_gol_qdd.update(qdd_)
+
+    	self.q = copy(q)
+    	self.qd = copy(qd)
+    	self.qdd = copy(qdd)
 
 
 if __name__ == '__main__':
 	print("Starting test")
 
 	rospy.init_node("robot_control", anonymous = True)
-	f = 200.
+	f = 100.
 	robot = Robot(1/f)
 	q_desired_lst = []
 	torque_lst = []
-	velocity_lst = []
+	vel_lst = []
+	acc_lst = []
 	q_lst = []
+	acc_check_lst = []
 
 	try:
 		r = rospy.Rate(f)
@@ -155,8 +184,10 @@ if __name__ == '__main__':
 			robot.position_control_update(q_desired)
 			q_desired_lst.append(q_desired[0])
 			q_lst.append(robot.q[0])
+			vel_lst.append(robot.qd[0])
+			acc_lst.append(robot.qdd[0])
+			acc_check_lst.append(robot.qdd_tocheck[0])
 			torque_lst.append(robot.torque[0])
-			velocity_lst.append(robot.qd[0])
 			r.sleep() 
 	except rospy.ROSInterruptException:
 		robot.destroy()
@@ -164,12 +195,13 @@ if __name__ == '__main__':
 		ax[0].plot(np.arange(len(q_desired_lst)), q_desired_lst, color = 'red')
 		ax[0].plot(np.arange(len(q_lst)), q_lst, color = 'blue')
 		ax[1].plot(np.arange(len(torque_lst)), torque_lst, color = 'red')
-		ax[2].plot(np.arange(len(velocity_lst)), velocity_lst, color = 'red')
-		ax[3].plot(np.arange(len(robot.velocity_lst)), robot.velocity_lst, color = 'red')
+		ax[2].plot(np.arange(len(vel_lst)), vel_lst, color = 'red')
+		ax[3].plot(np.arange(len(acc_lst)), acc_lst, color = 'red')
+		ax[3].plot(np.arange(len(acc_check_lst)), acc_check_lst, color = 'blue',linestyle='dashed')
 		ax[0].set_title("Position")
 		ax[1].set_title("Torque")
-		ax[2].set_title("Velocidad calculada")
-		ax[3].set_title("Velocidad del robot")
+		ax[2].set_title("Velocidad")
+		ax[3].set_title("Aceleracion")
 
 		plt.show()
 		pass#
