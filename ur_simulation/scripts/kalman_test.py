@@ -101,7 +101,7 @@ class Robot:
 		self.client.cancel_goal()
 
 	def simple_bangbang(self, torque_desired):
-		q_desired = np.sin(4*time.time())
+		q_desired = 0.5#np.sin(4*time.time())
 		q_desired = q_desired * np.array([1,0,0,0,0,0]) + self.q0 * np.array([0,1,1,1,1,1])
 		return q_desired
 
