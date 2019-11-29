@@ -23,9 +23,12 @@ class Robot:
 		self.qd = np.array([])	# Joint velocities
 		self.qdd = np.array([])	# Joint acceleration
 
-		cl = Joint(self.deltaT)
-
-		self.joint_spaces = [copy(cl), copy(cl), copy(cl), copy(cl), copy(cl), copy(cl)]
+		self.joint_spaces = [Joint(self.deltaT),
+							 Joint(self.deltaT), 
+							 Joint(self.deltaT), 
+							 Joint(self.deltaT), 
+							 Joint(self.deltaT), 
+							 Joint(self.deltaT)]
 
 		self.X = []		# Spatial position: x-y-z
 		self.joint_names = []
@@ -101,7 +104,7 @@ class Robot:
 		self.client.cancel_goal()
 
 	def simple_bangbang(self, torque_desired):
-		q_desired = 0.5#np.sin(4*time.time())
+		q_desired = np.sin(2.5*time.time())
 		q_desired = q_desired * np.array([1,0,0,0,0,0]) + self.q0 * np.array([0,1,1,1,1,1])
 		return q_desired
 
@@ -134,15 +137,15 @@ class Joint:
         self.K = np.zeros((3,1))	#np.random.randn(3,1)
         
         
-        self.Q = 0.05*np.array([[deltaT**5/20, deltaT**4/8, deltaT**3/6],
-        					[deltaT**4/8, deltaT**3/3, deltaT**2/2],
-        					[deltaT**3/6, deltaT**2/2, deltaT]]) #
+        self.Q = np.diag([0.01,0.05,0.1])#5.*np.array([[deltaT**5/20, deltaT**4/8, deltaT**3/6],
+        				#	[deltaT**4/8, deltaT**3/3, deltaT**2/2],
+        					#[deltaT**3/6, deltaT**2/2, deltaT]]) #
 
-        		#np.diag([0.01,0.05,0.1])
+        		#
         		#2.*np.eye(3)
         		
         
-        self.R = 0.05*np.eye(1)
+        self.R = 0.01*np.eye(1)
         self.I = np.eye(3)
         
 

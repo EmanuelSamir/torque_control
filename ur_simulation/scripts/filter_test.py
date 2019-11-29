@@ -23,9 +23,13 @@ class Robot:
 		self.qd = np.array([])	# Joint velocities
 		self.qdd = np.array([])	# Joint acceleration
 
-		cl = Joint(self.deltaT)
 
-		self.joint_spaces = [copy(cl), copy(cl), copy(cl), copy(cl), copy(cl), copy(cl)]
+		self.joint_spaces = [Joint(self.deltaT),
+							 Joint(self.deltaT), 
+							 Joint(self.deltaT), 
+							 Joint(self.deltaT), 
+							 Joint(self.deltaT), 
+							 Joint(self.deltaT)]
 
 		self.X = []		# Spatial position: x-y-z
 		self.joint_names = []
@@ -101,7 +105,7 @@ class Robot:
 		self.client.cancel_goal()
 
 	def simple_bangbang(self, torque_desired):
-		q_desired = np.sin(2.*time.time())
+		q_desired = np.sin(0.5*time.time())
 		q_desired = q_desired * np.array([1,0,0,0,0,0]) + self.q0 * np.array([0,1,1,1,1,1])
 		return q_desired
 
@@ -118,9 +122,15 @@ def unsort_data(data):
 	return tuple(x)
 
 class SavGol:
-	def __init__(self):
-		self.coeff = np.array([-2, 3, 6, 7, 6, 3, -2])/21.
-		self.X = np.zeros(7)
+	def __init__(self, acc = True):
+		if acc:
+			#self.coeff = np.array([-2, 3, 6, 7, 6, 3, -2])/21.
+			self.coeff = np.array([-78, -13, 42, 87,122, 147,162,167,162,147,122,87,42,-13,-78])/1105
+			self.X = np.zeros(15)
+		else:
+			print('jajaja')
+			self.coeff = np.array([-42,-21,-2, 15, 30,43,54,63,70,75,78,79,78,75,70,63,54,43,30,15,-2,-21,-42])/805.
+			self.X = np.zeros(23)
 
 	def update(self, x):
 		self.X[:-1] = self.X[1:]
@@ -138,7 +148,7 @@ class Joint:
         self.deltaT = deltaT
         
         self.sav_gol_qd = SavGol()
-        self.sav_gol_qdd = SavGol()
+        self.sav_gol_qdd = SavGol(False)
         
 
     def update_data(self, q):
@@ -165,6 +175,7 @@ if __name__ == '__main__':
 	acc_lst = []
 	q_lst = []
 	acc_check_lst = []
+	t = []
 
 	try:
 		r = rospy.Rate(f)
@@ -188,6 +199,7 @@ if __name__ == '__main__':
 			acc_lst.append(robot.qdd[0])
 			acc_check_lst.append(robot.qdd_tocheck[0])
 			torque_lst.append(robot.torque[0])
+			t.append(time.time())
 			r.sleep() 
 	except rospy.ROSInterruptException:
 		robot.destroy()
@@ -202,6 +214,9 @@ if __name__ == '__main__':
 		ax[1].set_title("Torque")
 		ax[2].set_title("Velocidad")
 		ax[3].set_title("Aceleracion")
+		f_, ax_ = plt.subplots(1)
+		tdiff = np.diff(t)
+		ax_.plot(np.arange(np.shape(tdiff)[0]), 1/tdiff)
 
 		plt.show()
 		pass#
