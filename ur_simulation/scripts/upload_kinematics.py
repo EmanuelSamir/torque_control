@@ -20,8 +20,6 @@ class Robot:
 		# Measured data initiation
 		self.deltaT = deltaT
 		self.q = np.array([])		# Joint position
-		self.qd = np.array([])	# Joint velocities
-		self.qdd = np.array([])	# Joint acceleration
 
 
 		self.joint_spaces = [Joint(self.deltaT),
@@ -35,6 +33,11 @@ class Robot:
 		self.joint_names = []
 
 		self.q0 = np.array([0., 0. , 0., -np.pi/2, np.pi/2, 0])
+		self.qd = np.zeros(self.q0.shape[0])	# Joint velocities
+		self.qdd = np.zeros(self.q0.shape[0])	# Joint acceleration
+
+		self.J = np.zeros([6,6])
+		self.X = np.zeros(3)
 
 		self.velocity_lst = []
 
@@ -67,21 +70,13 @@ class Robot:
 
 	def cb_joint_state(self, data):
 		self.joint_names = sort_data(data.name)
-		q_pred = np.array(sort_data(data.position))
+		self.q = np.array(sort_data(data.position))
 
-		q = []
-		qd = []
-		qdd = []
+		rbdl.CalcBodyToBaseCoordinates(self.model, self.q, 0, self.X, False)
 
-		for i, _ in enumerate(self.joint_spaces):
-			self.joint_spaces[i].update_data(q_pred[i])
-			q.append(self.joint_spaces[i].q)
-			qd.append(self.joint_spaces[i].qd)
-			qdd.append(self.joint_spaces[i].qdd)
+		rbdl.CalcBodySpatialJacobian(self.model, self.q, 0, self.X, self.J, False)
 
-		self.q = np.array(q)
-		self.qd = np.array(qd)
-		self.qdd = np.array(qdd)
+		rbdl.UpdateKinematics(self.model, self.q, self.qd, self.qdd)
 
 		self.calculate_torque()
 		self.calculate_acceleration()
