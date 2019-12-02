@@ -51,7 +51,7 @@ class Robot:
 
 
 		# Command
-		self.client = actionlib.SimpleActionClient('arm_controller/follow_joint_trajectory', FollowJointTrajectoryAction)
+		self.client = actionlib.SimpleActionClient('trajectory_controller/follow_joint_trajectory', FollowJointTrajectoryAction)
 		self.client.wait_for_server()
 
 		self.fjt = FollowJointTrajectoryGoal()
@@ -84,10 +84,17 @@ class Robot:
 		self.calculate_acceleration()
 
 	def position_control_update(self, q_desired):
-		self.fjt.trajectory = JointTrajectory()
-		self.fjt.trajectory.joint_names = unsort_data(self.joint_names)
-		self.fjt.trajectory.points = [JointTrajectoryPoint(positions = unsort_data(q_desired), #velocities = 6*[0.2,],
+
+		self.fjt.trajectory = 	JointTrajectory()
+		self.fjt.trajectory.header.stamp =rospy.Time.now()
+		#trajectory = JointTrajectory()
+		self.fjt.trajectory.joint_names = self.joint_names
+		#trajectory.joint_names = self.joint_names
+		self.fjt.trajectory.points = [JointTrajectoryPoint(positions = np.concatenate([q_desired, np.array([0.5*np.sin(2*time.time())])], axis = 0), #velocities = 6*[0.2,],
 												time_from_start = rospy.Duration(self.deltaT))]
+		#trajectory.points = [JointTrajectoryPoint(positions = q_desired, #velocities = 6*[0.2,],
+		#									time_from_start = rospy.Duration(self.deltaT))]
+		#self.pub.publish(trajectory)
 		self.client.send_goal(self.fjt)
 		self.client.wait_for_server()
 
@@ -104,22 +111,36 @@ class Robot:
 		self.client.cancel_goal()
 
 	def simple_bangbang(self, torque_desired):
-		q_desired = np.sin(2.5*time.time())
+		q_desired = 0.4 * np.sin(0.5*time.time())
 		q_desired = q_desired * np.array([1,0,0,0,0,0]) + self.q0 * np.array([0,1,1,1,1,1])
 		return q_desired
 
 def sort_data(data):
 	x = list(copy(data))
-	x[0] = data[2]
+	#x[0] = data[2]
+	#x[2] = data[0]
+	x[0] = data[3]
+	x[1] = data[2]
 	x[2] = data[0]
+	x[3] = data[4]
+	x[4] = data[5]
+	x[5] = data[6]
+	x[6] = data[1]
+	x.pop(-1)
 	return tuple(x)
 
 def unsort_data(data):
-	x = list(copy(data))
-	x[2] = data[0]
+	x = 7*[0]
+	#x[2] = data[0]
+	#x[0] = data[2]
+	x[3] = data[0]
+	x[2] = data[1]
 	x[0] = data[2]
+	x[4] = data[5]
+	x[5] = data[4]
+	x[6] = data[5]
+	x[1] = data[6]	
 	return tuple(x)
-
 class Joint:
     def __init__(self, deltaT):
         self.q = 0.
@@ -137,15 +158,15 @@ class Joint:
         self.K = np.zeros((3,1))	#np.random.randn(3,1)
         
         
-        self.Q = np.diag([0.01,0.05,0.1])#5.*np.array([[deltaT**5/20, deltaT**4/8, deltaT**3/6],
-        				#	[deltaT**4/8, deltaT**3/3, deltaT**2/2],
-        					#[deltaT**3/6, deltaT**2/2, deltaT]]) #
+        self.Q = .1*np.array([[deltaT**5/20, deltaT**4/8, deltaT**3/6],
+        					[deltaT**4/8, deltaT**3/3, deltaT**2/2],
+        					[deltaT**3/6, deltaT**2/2, deltaT]]) #
 
-        		#
+        		#2*np.diag([0.01,0.05,0.1])#
         		#2.*np.eye(3)
         		
         
-        self.R = 0.01*np.eye(1)
+        self.R = 0.001*np.eye(1)
         self.I = np.eye(3)
         
 
@@ -175,7 +196,7 @@ if __name__ == '__main__':
 	print("Starting test")
 
 	rospy.init_node("robot_control", anonymous = True)
-	f = 200.
+	f = 100.
 	robot = Robot(1/f)
 	q_desired_lst = []
 	torque_lst = []

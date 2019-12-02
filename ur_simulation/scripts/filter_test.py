@@ -31,7 +31,9 @@ class Robot:
 							 Joint(self.deltaT), 
 							 Joint(self.deltaT)]
 
-		self.X = []		# Spatial position: x-y-z
+		self.J = np.zeros([6,6])
+		self.X = np.zeros(3)
+
 		self.joint_names = []
 
 		self.q0 = np.array([0., 0. , 0., -np.pi/2, np.pi/2, 0])
@@ -82,6 +84,12 @@ class Robot:
 		self.q = np.array(q)
 		self.qd = np.array(qd)
 		self.qdd = np.array(qdd)
+
+		a = rbdl.CalcBaseToBodyCoordinates(self.model, self.q, 0, np.array([0.6,0.9,1.]), False)
+
+		rbdl.CalcBodySpatialJacobian(self.model, self.q, 0, self.X, self.J, False)
+
+		print(a)
 
 		self.calculate_torque()
 		self.calculate_acceleration()
@@ -170,7 +178,7 @@ class Joint:
 
         self.deltaT = deltaT
         
-        self.sav_gol_qd = SavGol()
+        self.sav_gol_qd = SavGol(False)
         self.sav_gol_qdd = SavGol(False)
         
 
